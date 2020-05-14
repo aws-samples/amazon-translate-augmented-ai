@@ -183,7 +183,7 @@ Resources:
       Role: !GetAtt TA2IS3NotificationRole.Arn
       MemorySize: 512
       Timeout: 180
-      CodeUri: TA2I-S3Notification.py
+      CodeUri: s3://aws-ml-blog/artifacts/amazon-translate-augmented-ai/TA2I-S3Notification.zip
       Environment:
           Variables: 
             FLOW_DEF_ARN: !Ref FlowDefinitionARNParameter
@@ -198,7 +198,7 @@ Resources:
       Role: !GetAtt TA2IHumanWorkflowCompletedRole.Arn
       MemorySize: 512
       Timeout: 180
-      CodeUri: TA2I-HumanWorkflowCompleted.py
+      CodeUri: CodeUri: s3://aws-ml-blog/artifacts/amazon-translate-augmented-ai/TA2I-HumanWorkflowCompleted.zip
       Environment:
           Variables: 
             FLOW_DEF_ARN: !Ref FlowDefinitionARNParameter
