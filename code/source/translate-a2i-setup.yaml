@@ -1,0 +1,319 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+  
+#   Licensed under the Apache License, Version 2.0 (the "License").
+#   You may not use this file except in compliance with the License.
+#   A copy of the License is located at
+  
+#       http://www.apache.org/licenses/LICENSE-2.0
+  
+#   or in the "license" file accompanying this file. This file is distributed 
+#   on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either 
+#   express or implied. See the License for the specific language governing 
+#   permissions and limitations under the License.
+
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  FlowDefinitionARNParameter: 
+    Type: String
+    Description: Enter the flow definition ARN you want to use.
+    MaxLength: 100
+    MinLength: 3
+
+  S3BucketNameParameter: 
+    Type: String
+    Description: Enter the name of the S3 bucket you want to use. Bucket should be empty.
+    MaxLength: 100
+    MinLength: 3    
+
+Resources:
+      
+  TA2IS3NotificationRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            -  
+              Effect: "Allow"
+              Principal:
+                Service:
+                - lambda.amazonaws.com
+              Action: "sts:AssumeRole"
+        Path: "/"
+        Policies:
+          - 
+            PolicyName: "AllowInvoke"
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: "lambda:InvokeFunction"
+                  Resource: "*"
+          - 
+            PolicyName: "ReadWriteToS3"
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: 
+                    - "S3:GetObject"
+                    - "S3:PutObject"
+                  Resource: !Sub 'arn:aws:s3:::${S3BucketNameParameter}/*'
+                - 
+                  Effect: "Allow"
+                  Action: 
+                    - "S3:ListBucket"
+                  Resource: !Sub 'arn:aws:s3:::${S3BucketNameParameter}'
+          - 
+            PolicyName: "TranslateAccess"
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: 
+                    - "translate:TranslateText"
+                  Resource: "*"
+          - 
+            PolicyName: "A2IAccess"
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: 
+                    - "sagemaker:StartHumanLoop"
+                  Resource: "*"
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  TA2IHumanWorkflowCompletedRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            -  
+              Effect: "Allow"
+              Principal:
+                Service:
+                - lambda.amazonaws.com
+              Action: "sts:AssumeRole"
+        Path: "/"
+        Policies:
+          - 
+            PolicyName: "AllowInvoke"
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: "lambda:InvokeFunction"
+                  Resource: "*"
+          - 
+            PolicyName: "ReadWriteToS3"
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: 
+                    - "S3:GetObject"
+                    - "S3:PutObject"
+                  Resource: !Sub 'arn:aws:s3:::${S3BucketNameParameter}/*'
+                - 
+                  Effect: "Allow"
+                  Action: 
+                    - "S3:ListBucket"
+                  Resource: !Sub 'arn:aws:s3:::${S3BucketNameParameter}'
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  
+  CustomResourceLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketNotification'
+                  - 's3:PutBucketNotification'
+                Resource: !Sub 'arn:aws:s3:::${S3BucketNameParameter}'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  # Allow S3 to invoke the lambda function
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref TA2IS3Notification
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:s3:::${S3BucketNameParameter}'
+    
+  TA2IS3Notification:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: TA2I-S3Notification.lambda_handler
+      Description: "Lambda function to handle S3 object create notifications and start translate job"
+      Runtime: python3.8
+      Role: !GetAtt TA2IS3NotificationRole.Arn
+      MemorySize: 512
+      Timeout: 180
+      CodeUri: TA2I-S3Notification.py
+      Environment:
+          Variables: 
+            FLOW_DEF_ARN: !Ref FlowDefinitionARNParameter
+            
+
+  TA2IHumanWorkflowCompleted:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: TA2I-HumanWorkflowCompleted.lambda_handler
+      Description: "Lambda function to handle completion of human workflow."
+      Runtime: python3.8
+      Role: !GetAtt TA2IHumanWorkflowCompletedRole.Arn
+      MemorySize: 512
+      Timeout: 180
+      CodeUri: TA2I-HumanWorkflowCompleted.py
+      Environment:
+          Variables: 
+            FLOW_DEF_ARN: !Ref FlowDefinitionARNParameter
+            TARGET_BUCKET_NAME: !Ref S3BucketNameParameter
+
+  TA2ICloudwatchEventRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "Event Rule to tie up human workflow completion to Lambda function"
+      EventPattern: 
+        source: 
+          - "aws.sagemaker"
+        detail-type: 
+          - "SageMaker A2I HumanLoop Status Change"
+      State: ENABLED
+      Targets: 
+        - Arn: !GetAtt TA2IHumanWorkflowCompleted.Arn
+          Id: "TargetFunctionV1"
+  
+  
+  TA2IHumanWorkflowCompletedPermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt TA2IHumanWorkflowCompleted.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TA2ICloudwatchEventRule.Arn
+
+  # CustomResourceLambdaFunction is the Lambda function used to add the S3 notification configuration 
+  # https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-s3-notification-lambda/
+  CustomResourceLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt CustomResourceLambdaRole.Arn
+      Code:
+        ZipFile: |
+
+            from __future__ import print_function
+            import json
+            import boto3
+            import cfnresponse
+            
+            SUCCESS = "SUCCESS"
+            FAILED = "FAILED"
+            
+            print('Loading function')
+            s3 = boto3.resource('s3')
+            
+            def lambda_handler(event, context):
+                print("Received event: " + json.dumps(event, indent=2))
+                responseData={}
+                try:
+                    if event['RequestType'] == 'Delete':
+                        print("Request Type:",event['RequestType'])
+                        Bucket=event['ResourceProperties']['Bucket']
+                        delete_notification(Bucket)
+                        print("Sending response to custom resource after Delete")
+                    elif event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                        print("Request Type:",event['RequestType'])
+                        LambdaArn=event['ResourceProperties']['LambdaArn']
+                        Bucket=event['ResourceProperties']['Bucket']
+                        add_notification(LambdaArn, Bucket)
+                        responseData={'Bucket':Bucket}
+                        print("Sending response to custom resource")
+                    responseStatus = 'SUCCESS'
+                except Exception as e:
+                    print('Failed to process:', e)
+                    responseStatus = 'FAILURE'
+                    responseData = {'Failure': 'Something bad happened.'}
+                cfnresponse.send(event, context, responseStatus, responseData)
+
+            def add_notification(LambdaArn, Bucket):
+                bucket_notification = s3.BucketNotification(Bucket)
+                response = bucket_notification.put(
+                  NotificationConfiguration={
+                    'LambdaFunctionConfigurations': [
+                      {
+                          'LambdaFunctionArn': LambdaArn,
+                          'Events': [
+                              's3:ObjectCreated:*'
+                          ],
+                          "Filter": {
+                            "Key": {
+                              "FilterRules": [
+                                {
+                                  "Name": "prefix",
+                                  "Value": "source/"
+                                },
+                                {
+                                    "Name": "suffix",
+                                    "Value": ".txt"
+                                }
+                              ]
+                            }
+                          }
+                      }
+                    ]
+                  }
+                )
+                print("Put request completed....")
+              
+            def delete_notification(Bucket):
+                bucket_notification = s3.BucketNotification(Bucket)
+                response = bucket_notification.put(
+                    NotificationConfiguration={}
+                )
+                print("Delete request completed....")
+      Runtime: python3.7
+      Timeout: 50
+
+  LambdaTrigger:
+    Type: 'Custom::LambdaTrigger'
+    DependsOn: S3InvokeLambdaPermission
+    Properties:
+      ServiceToken: !GetAtt CustomResourceLambdaFunction.Arn
+      LambdaArn: !GetAtt TA2IS3Notification.Arn
+      Bucket: !Ref S3BucketNameParameter

@@ -1,0 +1,11 @@
+.idea/*
+code/source/translate-a2i-setup-output.yaml
+outputs/output.json
+code/source/translate-a2i-setup_output.yaml
+inputs/document.xml
+inputs/Sample1.txt
+inputs/Sample2.txt
+inputs/Source.txt
+inputs/Source_Test_hu.docx
+inputs/Test1.docx
+Commands.txt
