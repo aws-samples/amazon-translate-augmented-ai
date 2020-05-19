@@ -20,7 +20,22 @@ Parameters:
     Type: String
     Description: Enter the name of the S3 bucket you want to use. Bucket should be empty.
     MaxLength: 100
-    MinLength: 3    
+    MinLength: 3 
+
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "Solution Configuration"
+        Parameters: 
+          - FlowDefinitionARNParameter
+          - S3BucketNameParameter
+    ParameterLabels: 
+      FlowDefinitionARNParameter: 
+        default: "Which human review workflow should be used?"
+      S3BucketNameParameter: 
+        default: "Which S3 bucket should be used?"
 
 Resources:
       
