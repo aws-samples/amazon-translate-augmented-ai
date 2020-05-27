@@ -207,7 +207,7 @@ Resources:
       Role: !GetAtt TA2IHumanWorkflowCompletedRole.Arn
       MemorySize: 512
       Timeout: 180
-      CodeUri: CodeUri: s3://aws-ml-blog/artifacts/amazon-translate-augmented-ai/TA2I-HumanWorkflowCompleted.zip
+      CodeUri: s3://aws-ml-blog/artifacts/amazon-translate-augmented-ai/TA2I-HumanWorkflowCompleted.zip
       Environment:
           Variables: 
             FLOW_DEF_ARN: !Ref FlowDefinitionARNParameter
