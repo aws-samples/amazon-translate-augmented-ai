@@ -3,7 +3,7 @@ An Amazon Translate and Amazon Augmented AI driven workflow to post edit machine
 
 # Solution Architecture
 
-![Solution Architecture](images/Solution-Architecture.png)
+![Solution Architecture](images/Solution-Architecture.PNG)
 
 
 ## Prerequisites
